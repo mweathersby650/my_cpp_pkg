@@ -1,6 +1,7 @@
  #include "rclcpp/rclcpp.hpp"
  #include "example_interfaces/msg/int64.hpp"
 
+
 class NumberPublisherNode : public rclcpp::Node
 {
 public:
