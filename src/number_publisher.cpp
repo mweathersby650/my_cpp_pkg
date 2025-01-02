@@ -7,9 +7,16 @@ class NumberPublisherNode : public rclcpp::Node
 public:
     NumberPublisherNode() : Node("number_publisher")
     {
+
+        this->declare_parameter("number_to_publish",2);
+        this->declare_parameter("publish_frequency",1.0);
+
+        number_ = this->get_parameter("number_to_publish").as_int();
+        double publish_frequency = this->get_parameter("publish_frequency").as_double();
+
         const std::string topicName = "number";
         publisher_ = this->create_publisher<example_interfaces::msg::Int64>(topicName, 10);
-        timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&NumberPublisherNode::publishNews, this));
+        timer_ = this->create_wall_timer(std::chrono::milliseconds((int)(1000.0/publish_frequency)), std::bind(&NumberPublisherNode::publishNews, this));
 
         RCLCPP_INFO(this->get_logger(), "Number Publisher has been started.");
     }
@@ -18,10 +25,11 @@ private:
     void publishNews()
     {
         auto msg = example_interfaces::msg::Int64();
-        msg.data = 64;
+        msg.data = number_;
         publisher_->publish(msg);
     }
     std::string robot_name_;
+    int number_;
     rclcpp::Publisher<example_interfaces::msg::Int64>::SharedPtr publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
 };

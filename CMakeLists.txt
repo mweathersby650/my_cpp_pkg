@@ -8,9 +8,11 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(example_interfaces REQUIRED)
 
+find_package(example_interfaces REQUIRED)
+find_package(turtlesim REQUIRED)
 find_package(my_robot_interfaces REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 add_executable(cpp_node src/my_first_node.cpp)
 ament_target_dependencies(cpp_node rclcpp)
@@ -18,12 +20,30 @@ ament_target_dependencies(cpp_node rclcpp)
 add_executable(robot_news_station src/robot_news_station.cpp)
 ament_target_dependencies(robot_news_station rclcpp example_interfaces)
 
+add_executable(battery src/battery.cpp)
+ament_target_dependencies(battery rclcpp my_robot_interfaces)
+
+add_executable(led_panel src/led_panel.cpp)
+ament_target_dependencies(led_panel rclcpp my_robot_interfaces)
 
 add_executable(smartphone src/smartphone.cpp)
 ament_target_dependencies(smartphone rclcpp example_interfaces)
 
 add_executable(hardware_status_publisher src/hw_status_publisher.cpp)
 ament_target_dependencies(hardware_status_publisher rclcpp my_robot_interfaces)
+
+add_executable(turtle_sim_controller src/turtle_sim_controller.cpp)
+ament_target_dependencies(turtle_sim_controller rclcpp my_robot_interfaces)
+ament_target_dependencies(turtle_sim_controller rclcpp turtlesim)
+ament_target_dependencies(turtle_sim_controller rclcpp turtlesim)
+ament_target_dependencies(turtle_sim_controller rclcpp geometry_msgs)
+
+add_executable(turtle_sim_spawner src/turtle_sim_spawn.cpp)
+ament_target_dependencies(turtle_sim_spawner rclcpp my_robot_interfaces)
+ament_target_dependencies(turtle_sim_spawner rclcpp turtlesim)
+
+add_executable(turtle_sim_window src/turtle_sim_window.cpp)
+ament_target_dependencies(turtle_sim_window rclcpp my_robot_interfaces)
 
 
 add_executable(number_publisher src/number_publisher.cpp)
@@ -48,8 +68,13 @@ install(TARGETS
    robot_news_station
    number_publisher
    hardware_status_publisher
+   turtle_sim_spawner
+   turtle_sim_window
+   turtle_sim_controller
    number_counter
    smartphone
+   battery
+   led_panel
    add_two_ints_server
    add_two_ints_client_no_oop
    add_two_ints_client
