@@ -54,7 +54,7 @@ private:
         auto request = std::make_shared<turtlesim::srv::Spawn_Request>();
         while (1)
         {
-            if (mTotalTurtlesCount >= MAX_NUMBER_OF_TURTLES)
+            if (mTotalTurtlesCount >= MAX_NUMBER_OF_TURTLES && MAX_NUMBER_OF_TURTLES != 0)
             {
                 RCLCPP_INFO(this->get_logger(), "Maxiumum number of turtles created");
                 break;

@@ -17,18 +17,18 @@ public:
     TurtleSimControllerNode() : Node("turtlesim_controller")
     {
 
-        // read in parameter to say how often to spawn new turtle
-        this->declare_parameter("linear_velocity", .5);
+        this->declare_parameter("linear_velocity", .5); // how fast to drive forward
         this->mLinearVelocity = this->get_parameter("linear_velocity").as_double();
-        // read in parameter to say how often to spawn new turtle
-        this->declare_parameter("angular_velocity", .5);
+
+        this->declare_parameter("angular_velocity", .5); // how fast to spin
         this->mAngularVelocity = this->get_parameter("angular_velocity").as_double();
 
         // listen to topic to find new turtles
-        subscriber_ = this->create_subscription<my_robot_interfaces::msg::SpawnedTurtle>(this->mTopic, 10, std::bind(&TurtleSimControllerNode::callback, this, std::placeholders::_1));
+        subscriber_ = this->create_subscription<my_robot_interfaces::msg::SpawnedTurtle>(this->CREATED_TURTLES_TOPIC, 10, std::bind(&TurtleSimControllerNode::callback, this, std::placeholders::_1));
 
+        // listen to main turtle topic to find current position
         mMainTurtleCmd = this->create_subscription<turtlesim::msg::Pose>("/turtle1/pose", 10, std::bind(&TurtleSimControllerNode::mainTurtleCallback, this, std::placeholders::_1));
-        timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&TurtleSimControllerNode::driveToTurtle, this));
+        mTimerToDriveTurtle = this->create_wall_timer(std::chrono::milliseconds(50), std::bind(&TurtleSimControllerNode::driveToTurtle, this));
         RCLCPP_INFO(this->get_logger(), "Turtle Sim Controller Node has been started");
     }
 
@@ -36,11 +36,8 @@ private:
     std::vector<Turtle *> turtles;
     double mLinearVelocity = .5;
     double mAngularVelocity = 10;
-    //bool mTurtleSeen = false;
-    //turtlesim::msg::Pose goalPose;
-    //std::string goalName;
-    rclcpp::TimerBase::SharedPtr timer_;
-    const std::string mTopic = "created_turtles";
+    rclcpp::TimerBase::SharedPtr mTimerToDriveTurtle;
+    const std::string CREATED_TURTLES_TOPIC = "created_turtles";
     rclcpp::Subscription<my_robot_interfaces::msg::SpawnedTurtle>::SharedPtr subscriber_;
 
     rclcpp::Subscription<turtlesim::msg::Pose>::SharedPtr mMainTurtleCmd;
@@ -61,15 +58,10 @@ private:
         auto turtlePose = msg->pose;
         std::string message = "New turtle received: [name=" + turtleName + " (" + std::to_string(turtlePose.x) + "," + std::to_string(turtlePose.y) + ") ]";
         RCLCPP_INFO(this->get_logger(), message.c_str());
-        //goalPose = msg->pose;
-        //this->goalName = turtleName;
-        //this->mTurtleSeen = true;
         Turtle *turtle = new Turtle();
         turtle->name = turtleName;
         turtle->pose = turtlePose;
         turtles.push_back(turtle);
-        // tell the main turtle to go the new turtle
-        // driveToTurtle(turtlePose);
     }
 
     double square(double base)
@@ -83,10 +75,6 @@ private:
     double calculateGoalToAngle(int x, int y)
     {
         return atan2(y - currentPose.y, x - currentPose.x);
-    }
-
-    double calculateAngleDifference(turtlesim::msg::Pose goal, turtlesim::msg::Pose current)
-    {
     }
 
     // get main turtles current pose
@@ -104,20 +92,17 @@ private:
         double distanceErrorThreshold = 1; //.3;
         double angleErrorThreshold = .3;
 
+        auto publisher = this->create_publisher<geometry_msgs::msg::Twist>("/turtle1/cmd_vel", 10);
+
         if (turtles.empty() == true)
         {
 
-            RCLCPP_INFO(this->get_logger(), "No turtles yet");
+            RCLCPP_DEBUG(this->get_logger(), "No turtles yet2");
+
+            drive(publisher, 0, 0);
             return;
         }
         Turtle *turtle = turtles.front();
-        // if (this->mTurtleSeen == false)
-        //{
-
-        //    RCLCPP_INFO(this->get_logger(), "No turtles seen yet");
-        //    return;
-        //}
-        auto publisher = this->create_publisher<geometry_msgs::msg::Twist>("/turtle1/cmd_vel", 10);
 
         // calculate the distance to the goal
         auto distanceToGoal = calculateEuclideanDistance(turtle->pose.x, turtle->pose.y);
@@ -128,46 +113,40 @@ private:
         // figure out how far off the mark the main turtle is relative to the newly spanwed one
         auto angleDifference = abs(angleToGoal - currentPose.theta);
 
+        auto rotate = this->mAngularVelocity;
+
         // keep looping until we are pointed in the right direction
         if (angleDifference > angleErrorThreshold)
         {
-            RCLCPP_INFO(this->get_logger(), "rotating: current_angle = %f, angle_to_goal = %f, diff=%f", currentPose.theta, angleToGoal, angleDifference);
-            drive(publisher, 0, mAngularVelocity);
+            // rotate in the most efficient direction
+            if (angleToGoal < currentPose.theta)
+            {
+                rotate = -mAngularVelocity;
+            }
+            RCLCPP_DEBUG(this->get_logger(), "rotating: current_angle = %f, angle_to_goal = %f, diff=%f", currentPose.theta, angleToGoal, angleDifference);
+            drive(publisher, 0, rotate);
         }
         else if (distanceToGoal > distanceErrorThreshold)
         {
-            RCLCPP_INFO(this->get_logger(), "driving: new distance to goal = %f with angle %f", distanceToGoal, angleDifference);
+            RCLCPP_DEBUG(this->get_logger(), "driving: new distance to goal = %f with angle %f", distanceToGoal, angleDifference);
             drive(publisher, mLinearVelocity, 0);
         }
         else
         {
-
-            // arrived, clear the target turtle
-            auto client = this->create_client<turtlesim::srv::Kill>("kill");
-            // while (!client->wait_for_service(std::chrono::seconds(1)))
-            //{
-            //     RCLCPP_WARN(this->get_logger(), "Waiting for the kill server to be up...");
-            // }
-
-            auto request = std::make_shared<turtlesim::srv::Kill_Request>();
-            request->name = turtle->name;
-            
-            client->async_send_request(request);
-
-        turtles.erase(turtles.begin());
-            //this->mTurtleSeen = false;
-
-            // try
-            //{
-            //     auto response = future.get();
-            //     RCLCPP_INFO(this->get_logger(), "Killed turtle[%s]", this->goalName.c_str());
-            // }
-            // catch (const std::exception &e)
-            //{
-
-            //    RCLCPP_ERROR(this->get_logger(), "Service call failed");
-            //}
+            deleteTargetTurtle(turtle);
+            turtles.erase(turtles.begin());
         }
+    }
+    void deleteTargetTurtle(Turtle *turtle)
+    {
+        // arrived, clear the target turtle
+        auto client = this->create_client<turtlesim::srv::Kill>("kill");
+        auto request = std::make_shared<turtlesim::srv::Kill_Request>();
+        request->name = turtle->name;
+        client->async_send_request(request);
+
+        std::string msg = "killed turtle: " + turtle->name;
+        RCLCPP_INFO(this->get_logger(), msg.c_str());
     }
 };
 
